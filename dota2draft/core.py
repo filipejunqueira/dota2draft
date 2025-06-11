@@ -1,13 +1,17 @@
 # dota2draft/core.py
 
-from typing import List, Optional, Dict, Any
-# from rich.console import Console # Replaced by logger
+from typing import List, Optional, Dict, Any, Tuple
+from enum import Enum, auto
 
 from .db import DBManager
 from .api import OpenDotaAPIClient
 from .logger_config import logger # Import the configured logger
 
-# console = Console() # Replaced by logger
+class FetchStatus(Enum):
+    """Enumeration for the status of a fetch operation."""
+    ADDED = auto()
+    SKIPPED = auto()
+    FAILED = auto()
 
 class DataService:
     def __init__(self, db_manager: DBManager, api_client: OpenDotaAPIClient):
@@ -111,22 +115,28 @@ class DataService:
         logger.warning("[CACHE] Failed to fetch all leagues list from API.")
         return []
 
-    def get_match_details(self, match_id: int, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+    def get_match_details(self, match_id: int, force_refresh: bool = False) -> Tuple[FetchStatus, Optional[Dict[str, Any]]]:
         """
         Gets details for a specific match, using the database as a cache.
+        Returns a status tuple indicating the outcome.
         """
         logger.debug(f"Getting match details for ID: {match_id}, Force refresh: {force_refresh}")
         if not force_refresh:
             db_data = self.db_manager.get_match_data(match_id)
             if db_data:
-                logger.debug(f"Match {match_id} found in DB cache.")
-                return db_data
+                logger.debug(f"Match {match_id} found in DB cache. Skipping.")
+                return FetchStatus.SKIPPED, db_data
         
         logger.info(f"Match {match_id} not in DB cache or force refresh. Fetching from API.")
-        api_data = self.api_client.fetch_match_details(match_id)
-        if api_data:
-            self.db_manager.store_match_data(match_id, api_data)
-            logger.info(f"Match {match_id} fetched from API and stored in DB.")
-        else:
-            logger.warning(f"Failed to fetch match {match_id} from API.")
-        return api_data
+        try:
+            api_data = self.api_client.fetch_match_details(match_id)
+            if api_data:
+                self.db_manager.store_match_data(match_id, api_data)
+                logger.info(f"Match {match_id} fetched from API and stored in DB.")
+                return FetchStatus.ADDED, api_data
+            else:
+                logger.warning(f"Failed to fetch match {match_id} from API (no data returned).")
+                return FetchStatus.FAILED, None
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while fetching match {match_id}: {e}", exc_info=True)
+            return FetchStatus.FAILED, None

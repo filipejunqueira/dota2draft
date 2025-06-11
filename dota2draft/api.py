@@ -49,4 +49,11 @@ class OpenDotaAPIClient:
     def fetch_league_matches_summary(self, league_id: int) -> Optional[List[Dict[str, Any]]]:
         """Fetches a summary list of matches for a specific league ID."""
         logger.info(f"[API] Fetching match summaries for league {league_id}...")
-        return self._request(f"leagues/{league_id}/matches")
+        matches = self._request(f"leagues/{league_id}/matches")
+        if matches is None:
+            # An API error occurred, which is already logged by _request.
+            return None
+        if not matches:
+            # The request was successful, but no matches were returned.
+            logger.warning(f"[API] No matches found for league {league_id}. The league might be invalid or have no matches processed by OpenDota.")
+        return matches

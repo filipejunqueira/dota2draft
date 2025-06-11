@@ -33,7 +33,7 @@ The project has been refactored into a modular Python package for better organiz
 
 ## Usage
 
-All functionalities are accessed through `dota2draft_cli.py`. You can see a list of all available commands by running:
+All functionalities are accessed through `dota2draft_cli.py`. The CLI is organized into logical groups of commands (`leagues`, `heroes`, `players`, `nn`). You can see a list of all available commands by running:
 
 ```bash
 python dota2draft_cli.py --help
@@ -48,78 +48,112 @@ First, you need to populate your local database with data from the OpenDota API.
     python dota2draft_cli.py refresh-static
     ```
 
-2.  **Fetch League Matches**: Download and store all match details for a specific league. You can find league IDs on the OpenDota website.
+2.  **Fetch League Matches**: Download and store all match details for a specific league. You can find league IDs on the OpenDota website or by using the `leagues` commands.
+
+    The command features a progress bar, skips matches that are already downloaded (unless `--force-refresh` is used), and provides a summary of the operation.
     ```bash
     # Example: Fetch all matches for league ID 15728 (ESL One Birmingham 2024)
     python dota2draft_cli.py fetch-league 15728
     ```
 
-### Database Querying & Statistics
+### Exploring the Database
 
-Explore the data stored in your local database.
+The CLI provides several commands to query the data you've downloaded.
 
-1.  **List and Search Leagues**: Find the `LEAGUE_ID` for a tournament.
+#### Leagues Commands (`leagues`)
+
+Manage and view information about professional leagues.
+
+-   **List All Leagues**: `python dota2draft_cli.py leagues list`
+-   **Search for a League**: `python dota2draft_cli.py leagues search "International"`
+-   **List Downloaded Leagues**: `python dota2draft_cli.py leagues downloaded`
+
+#### Hero Commands (`heroes`)
+
+View hero statistics and manage hero nicknames.
+
+-   **Get Hero Stats**: Calculate hero pick/ban/win rates. You can filter by league or date.
     ```bash
-    # List all leagues in the database
-    python dota2draft_cli.py leagues list
+    # Get hero stats across all matches
+    python dota2draft_cli.py heroes stats
 
-    # Search for leagues containing a keyword
-    python dota2draft_cli.py leagues search "International"
+    # Get hero stats for a specific league and after a certain date (post-patch analysis)
+    python dota2draft_cli.py heroes stats --league-id 15728 --after-date 2024-01-01
+    ```
+-   **Set Hero Nickname**: Assign a custom, memorable nickname to a hero. This nickname can be used in other commands, like `nn predict`.
+    ```bash
+    # Assign 'AM' to Anti-Mage
+    python dota2draft_cli.py heroes set-nickname "Anti-Mage" "AM"
+
+    # You can also use the hero's ID
+    python dota2draft_cli.py heroes set-nickname 1 "Magina"
+    ```
+-   **List Hero Nicknames**: View all nicknames assigned to a specific hero.
+    ```bash
+    python dota2draft_cli.py heroes list-nicknames "Anti-Mage"
+    ```
+-   **Remove Hero Nickname**: Delete a specific nickname from a hero.
+    ```bash
+    python dota2draft_cli.py heroes remove-nickname "Anti-Mage" "Magina"
     ```
 
-2.  **Get Statistics**: Calculate hero and player statistics. You can filter these by league and/or date.
+#### Player Commands (`players`)
+
+View player statistics and manage player nicknames.
+
+-   **Get Player Stats**: View detailed stats for a specific player.
     ```bash
-    # Get hero pick/ban/win stats across all matches
-    python dota2draft_cli.py stats heroes
+    # Use the player's account ID
+    python dota2draft_cli.py players stats 12345678
 
-    # Get player stats for a specific league
-    python dota2draft_cli.py stats players --league-id 15728
-
-    # Get hero stats for matches after a specific date (post-patch analysis)
-    python dota2draft_cli.py stats heroes --after-date 2024-01-01
+    # Use a nickname you've assigned
+    python dota2draft_cli.py players stats "MyFavoritePlayer"
+    ```
+-   **Set Player Nickname**: Assign a fixed nickname to a player's account ID. This is useful for tracking players who frequently change their in-game name.
+    ```bash
+    python dota2draft_cli.py players set-nickname 12345678 "MyFavoritePlayer"
+    ```
+-   **List Player Nicknames**: View all nicknames assigned to a specific player.
+    ```bash
+    python dota2draft_cli.py players list-nicknames 12345678
+    ```
+-   **Remove Player Nickname**: Delete a specific nickname from a player.
+    ```bash
+    python dota2draft_cli.py players remove-nickname 12345678 "MyFavoritePlayer"
     ```
 
 ### Match-Specific Analysis
 
-Once you have data, you can view and analyze it.
-
-1.  **Get Match Draft**: Display the picks and bans for a specific match.
-    ```bash
-    python dota2draft_cli.py get-draft <MATCH_ID>
-    ```
-
-2.  **Analyze Lanes**: Perform a detailed laning-phase analysis for a match based on pre-configured KPIs.
+-   **Analyze Lanes**: Perform a detailed laning-phase analysis for a match.
     ```bash
     python dota2draft_cli.py analyze-lanes <MATCH_ID>
     ```
-
-3.  **Export Analysis to CSV**: Run the lane analysis for all matches of a league in your database and export the results to a CSV file. This CSV is required for training the neural network.
+-   **Export Analysis to CSV**: Run the lane analysis for all matches of a league and export the results to a CSV file. This CSV is required for training the neural network.
     ```bash
-    # This will create a 'lanes.csv' file by default
     python dota2draft_cli.py export-analysis <LEAGUE_ID>
     ```
 
-### Neural Network
+### Neural Network (`nn`)
 
 The `nn` subcommand contains all model-related operations.
 
-1.  **Train the Model**: Train the neural network using the data from a CSV file (generated by the `export-analysis` command).
+1.  **Train the Model**: Train the neural network using the data from a CSV file.
     ```bash
-    # Use the default 'lanes.csv' and train for 50 epochs
-    python dota2draft_cli.py nn train
-
-    # Specify custom parameters
-    python dota2draft_cli.py nn train --csv-file my_analysis.csv --epochs 100
+    python dota2draft_cli.py nn train --csv-file lanes.csv --epochs 100
     ```
-    This will save the trained model weights to `dota_draft_predictor_weights.pth` and create a loss plot. All generated PNG image files (training loss, evaluation plots) will be saved in the `nn_artifacts/` directory.
+    This will save the trained model weights to `dota_draft_predictor_weights.pth`. All generated PNG image files (e.g., training loss plot) will be saved in the `nn_artifacts/` directory.
+
+2.  **Make Predictions**: Use the trained model to predict lane scores for a given draft. You can use official hero names or any nicknames you've set.
+    ```bash
+    # Using official names
+    python dota2draft_cli.py nn predict "Radiant Pick: Axe; Dire Pick: Juggernaut"
+
+    # Using a hero nickname
+    python dota2draft_cli.py nn predict "Radiant Pick: AM; Dire Pick: Juggernaut"
+    ```
 
 ## Configuration
 
 The application's behavior can be customized through the `config.yaml` file. This file allows you to set default paths for the database, CSV outputs, and model weights, as well as configure parameters for the lane analysis KPIs and neural network architecture.
 
 Many configuration values can be overridden at runtime using CLI options (e.g., `--out` for `export-analysis`, `--model-file` for `nn` commands).
-
-2.  **Make Predictions**: Use the trained model to predict lane scores for a given draft string.
-    ```bash
-    python dota2draft_cli.py nn predict "Radiant Pick: Axe; Dire Pick: Juggernaut; Radiant Ban: Invoker; ..."
-    ```

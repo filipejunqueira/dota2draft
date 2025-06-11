@@ -61,6 +61,28 @@ class DBManager:
                 tier TEXT,
                 fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
             )""")
+            cursor.execute("DROP TABLE IF EXISTS player_nicknames;")
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS player_nicknames (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER NOT NULL,
+                nickname TEXT NOT NULL UNIQUE COLLATE NOCASE
+            )""")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_player_nicknames_account_id ON player_nicknames (account_id);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_player_nicknames_nickname ON player_nicknames (nickname);")
+
+            # Hero Nicknames Table
+            # cursor.execute("DROP TABLE IF EXISTS hero_nicknames;") # Use only if schema changes require a reset
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hero_nicknames (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hero_id INTEGER NOT NULL,
+                nickname TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                FOREIGN KEY (hero_id) REFERENCES heroes (hero_id)
+            )""")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_hero_nicknames_hero_id ON hero_nicknames (hero_id);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_hero_nicknames_nickname ON hero_nicknames (nickname);")
+            
             self.conn.commit()
             logger.info(f"Database '{self.db_name}' initialized/checked.")
         except sqlite3.Error as e:
@@ -270,9 +292,11 @@ class DBManager:
 
             results = []
             for hero_id, stats in hero_stats.items():
+                nicknames = self.get_hero_nicknames(hero_id)
                 results.append({
                     "hero_id": hero_id,
                     "hero_name": all_heroes.get(hero_id, "Unknown Hero"),
+                    "nicknames": nicknames,
                     "picks": stats["picks"],
                     "bans": stats["bans"],
                     "wins": stats["wins"],
@@ -337,6 +361,276 @@ class DBManager:
         except (sqlite3.Error, json.JSONDecodeError) as e:
             logger.error(f"Error getting player stats: {e}")
             return []
+
+    def set_player_nickname(self, account_id: int, nickname: str) -> bool:
+        """Assigns a nickname to a player. Nicknames are unique (case-insensitive)."""
+        try:
+            self.conn.execute(
+                "INSERT INTO player_nicknames (account_id, nickname) VALUES (?, ?)",
+                (account_id, nickname)
+            )
+            self.conn.commit()
+            logger.info(f"[DB] Assigned nickname '{nickname}' to account ID {account_id}.")
+            return True
+        except sqlite3.IntegrityError:
+            # This can happen if the nickname is already taken (UNIQUE constraint with COLLATE NOCASE)
+            # or if trying to add a duplicate nickname for the same player (though the former is more likely here)
+            logger.warning(f"[DB] Failed to assign nickname '{nickname}' to account ID {account_id}. Nickname likely already in use or duplicate.")
+            # Check if this player already has this nickname
+            existing_nicknames = self.get_player_nicknames(account_id)
+            if nickname.lower() in [n.lower() for n in existing_nicknames]:
+                logger.info(f"[DB] Account ID {account_id} already has nickname '{nickname}'. No action taken.")
+                return True # Considered success as the state is already achieved
+            return False
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error assigning nickname '{nickname}' for account ID {account_id}: {e}")
+            return False
+
+    def get_account_id_by_nickname(self, nickname: str) -> Optional[int]:
+        """Finds a player's account ID by their nickname (case-insensitive)."""
+        try:
+            cursor = self.conn.cursor()
+            # The COLLATE NOCASE on the table schema handles case-insensitivity
+            cursor.execute("SELECT account_id FROM player_nicknames WHERE nickname = ?", (nickname,))
+            row = cursor.fetchone()
+            if row:
+                logger.debug(f"[DB] Found account ID {row['account_id']} for nickname '{nickname}'.")
+                return row['account_id']
+            logger.debug(f"[DB] No account ID found for nickname '{nickname}'.")
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error getting account ID for nickname '{nickname}': {e}")
+            return None
+
+    def get_player_nicknames(self, account_id: int) -> List[str]:
+        """Retrieves all fixed nicknames for a player."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT nickname FROM player_nicknames WHERE account_id = ? ORDER BY nickname", (account_id,))
+            rows = cursor.fetchall()
+            nicknames = [row['nickname'] for row in rows]
+            logger.debug(f"[DB] Found nicknames {nicknames} for account ID {account_id}." if nicknames else f"[DB] No nicknames found for account ID {account_id}.")
+            return nicknames
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error getting nicknames for account ID {account_id}: {e}")
+            return []
+
+    def remove_player_nickname(self, account_id: int, nickname: str) -> bool:
+        """Removes a specific nickname from a player. Case-insensitive."""
+        try:
+            cursor = self.conn.cursor()
+            # COLLATE NOCASE makes the comparison case-insensitive
+            cursor.execute(
+                "DELETE FROM player_nicknames WHERE account_id = ? AND nickname = ? COLLATE NOCASE",
+                (account_id, nickname)
+            )
+            self.conn.commit()
+            # cursor.rowcount will be 1 if a row was deleted, 0 otherwise
+            if cursor.rowcount > 0:
+                logger.info(f"[DB] Removed nickname '{nickname}' from account ID {account_id}.")
+                return True
+            else:
+                logger.warning(f"[DB] Nickname '{nickname}' not found for account ID {account_id}. No action taken.")
+                return False
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error removing nickname '{nickname}' for account ID {account_id}: {e}")
+            return False
+
+    # --- Hero Nickname Methods ---
+    def set_hero_nickname(self, hero_id: int, nickname: str) -> bool:
+        """Assigns a nickname to a hero. Nicknames are unique (case-insensitive)."""
+        try:
+            # Verify hero_id exists
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT 1 FROM heroes WHERE hero_id = ?", (hero_id,))
+            if not cursor.fetchone():
+                logger.warning(f"[DB] Attempted to set nickname for non-existent hero_id: {hero_id}.")
+                return False
+
+            self.conn.execute(
+                "INSERT INTO hero_nicknames (hero_id, nickname) VALUES (?, ?)",
+                (hero_id, nickname)
+            )
+            self.conn.commit()
+            logger.info(f"[DB] Assigned nickname '{nickname}' to hero ID {hero_id}.")
+            return True
+        except sqlite3.IntegrityError:
+            logger.warning(f"[DB] Failed to assign nickname '{nickname}' to hero ID {hero_id}. Nickname likely already in use or duplicate for this hero.")
+            existing_nicknames = self.get_hero_nicknames(hero_id)
+            if nickname.lower() in [n.lower() for n in existing_nicknames]:
+                logger.info(f"[DB] Hero ID {hero_id} already has nickname '{nickname}'. No action taken.")
+                return True # Considered success
+            return False
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error assigning nickname '{nickname}' for hero ID {hero_id}: {e}")
+            return False
+
+    def get_hero_id_by_nickname(self, nickname: str) -> Optional[int]:
+        """Finds a hero's ID by their nickname (case-insensitive)."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT hero_id FROM hero_nicknames WHERE nickname = ?", (nickname,))
+            row = cursor.fetchone()
+            if row:
+                logger.debug(f"[DB] Found hero ID {row['hero_id']} for nickname '{nickname}'.")
+                return row['hero_id']
+            logger.debug(f"[DB] No hero ID found for nickname '{nickname}'.")
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error getting hero ID for nickname '{nickname}': {e}")
+            return None
+
+    def get_hero_nicknames(self, hero_id: int) -> List[str]:
+        """Retrieves all fixed nicknames for a hero."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT nickname FROM hero_nicknames WHERE hero_id = ? ORDER BY nickname", (hero_id,))
+            rows = cursor.fetchall()
+            nicknames = [row['nickname'] for row in rows]
+            logger.debug(f"[DB] Found nicknames {nicknames} for hero ID {hero_id}." if nicknames else f"[DB] No nicknames found for hero ID {hero_id}.")
+            return nicknames
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error getting nicknames for hero ID {hero_id}: {e}")
+            return []
+
+    def remove_hero_nickname(self, hero_id: int, nickname: str) -> bool:
+        """Removes a specific nickname from a hero. Case-insensitive."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "DELETE FROM hero_nicknames WHERE hero_id = ? AND nickname = ? COLLATE NOCASE",
+                (hero_id, nickname)
+            )
+            self.conn.commit()
+            if cursor.rowcount > 0:
+                logger.info(f"[DB] Removed nickname '{nickname}' from hero ID {hero_id}.")
+                return True
+            else:
+                logger.warning(f"[DB] Nickname '{nickname}' not found for hero ID {hero_id}. No action taken.")
+                return False
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error removing nickname '{nickname}' for hero ID {hero_id}: {e}")
+            return False
+
+    def resolve_hero_identifier(self, identifier: str) -> Optional[int]:
+        """Resolves a hero identifier (ID, official name, or nickname) to a hero_id."""
+        # Try as integer ID first
+        if identifier.isdigit():
+            hero_id = int(identifier)
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT hero_id FROM heroes WHERE hero_id = ?", (hero_id,))
+            if cursor.fetchone():
+                logger.debug(f"[DB] Resolved hero identifier '{identifier}' as direct hero_id: {hero_id}")
+                return hero_id
+
+        # Try as official name (case-insensitive)
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT hero_id FROM heroes WHERE name = ? COLLATE NOCASE", (identifier,))
+            row = cursor.fetchone()
+            if row:
+                logger.debug(f"[DB] Resolved hero identifier '{identifier}' as official name to hero_id: {row['hero_id']}")
+                return row['hero_id']
+        except sqlite3.Error as e:
+            logger.error(f"[DB] SQLite error resolving hero identifier '{identifier}' by official name: {e}")
+        
+        # Try as nickname (case-insensitive, handled by table schema)
+        hero_id_from_nickname = self.get_hero_id_by_nickname(identifier)
+        if hero_id_from_nickname is not None:
+            logger.debug(f"[DB] Resolved hero identifier '{identifier}' as nickname to hero_id: {hero_id_from_nickname}")
+            return hero_id_from_nickname
+
+        logger.warning(f"[DB] Could not resolve hero identifier '{identifier}' to a known hero_id.")
+        return None
+
+    def get_downloaded_leagues_info(self) -> List[Dict[str, Any]]:
+        """Retrieves information about leagues for which matches have been downloaded."""
+        try:
+            cursor = self.conn.cursor()
+            # Get distinct league_ids from matches that have a leagueid set
+            cursor.execute("SELECT DISTINCT JSON_EXTRACT(data, '$.leagueid') FROM matches WHERE JSON_VALID(data) AND JSON_EXTRACT(data, '$.leagueid') IS NOT NULL")
+            league_ids_rows = cursor.fetchall()
+            downloaded_league_ids = [row[0] for row in league_ids_rows if row[0] is not None]
+
+            if not downloaded_league_ids:
+                logger.info("[DB] No downloaded leagues found with associated match data.")
+                return []
+
+            # Fetch details for these league_ids from the all_leagues table
+            # Using a placeholder for each ID in the IN clause
+            placeholders = ','.join(['?'] * len(downloaded_league_ids))
+            query = f"SELECT league_id, name, tier FROM all_leagues WHERE league_id IN ({placeholders}) ORDER BY name"
+            cursor.execute(query, downloaded_league_ids)
+            leagues_info_rows = cursor.fetchall()
+
+            leagues_list = [
+                {"league_id": r["league_id"], "name": r["name"], "tier": r["tier"]}
+                for r in leagues_info_rows
+            ]
+            logger.debug(f"[DB] Found {len(leagues_list)} downloaded leagues with details.")
+            return leagues_list
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error getting downloaded leagues info: {e}")
+            return []
+
+    def get_stats_for_player(self, account_id: int) -> Optional[Dict[str, Any]]:
+        """Calculates detailed statistics for a single player."""
+        player_stats = {
+            "matches_played": 0,
+            "wins": 0,
+            "heroes_played": {}
+        }
+        player_name = None
+
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT data FROM matches")
+            all_matches_raw = cursor.fetchall()
+
+            for row in all_matches_raw:
+                match_data = json.loads(row['data'])
+                
+                if not match_data.get("players"):
+                    continue
+
+                for player in match_data["players"]:
+                    if player.get("account_id") == account_id:
+                        player_stats["matches_played"] += 1
+                        
+                        if player.get("personaname"):
+                            player_name = player.get("personaname")
+
+                        is_radiant_player = player.get("isRadiant", player.get("player_slot", 0) < 128)
+                        radiant_win = match_data.get("radiant_win", False)
+                        if (is_radiant_player and radiant_win) or (not is_radiant_player and not radiant_win):
+                            player_stats["wins"] += 1
+
+                        hero_id = player.get("hero_id")
+                        if hero_id:
+                            if hero_id not in player_stats["heroes_played"]:
+                                player_stats["heroes_played"][hero_id] = {"plays": 0, "wins": 0}
+                            
+                            player_stats["heroes_played"][hero_id]["plays"] += 1
+                            if (is_radiant_player and radiant_win) or (not is_radiant_player and not radiant_win):
+                                player_stats["heroes_played"][hero_id]["wins"] += 1
+            
+            if player_stats["matches_played"] == 0:
+                logger.warning(f"No matches found for player {account_id}.")
+                return None
+
+            player_stats["win_rate"] = (player_stats["wins"] / player_stats["matches_played"]) * 100 if player_stats["matches_played"] > 0 else 0
+            
+            player_stats["player_name"] = player_name
+            
+            all_heroes = self.get_all_heroes()
+            for hero_id, stats in player_stats["heroes_played"].items():
+                stats["hero_name"] = all_heroes.get(hero_id, "Unknown Hero")
+
+            return player_stats
+
+        except (sqlite3.Error, json.JSONDecodeError) as e:
+            logger.error(f"Error getting stats for player {account_id}: {e}")
+            return None
 
     def clear_all_leagues_table(self):
         """Deletes all records from the 'all_leagues' table."""

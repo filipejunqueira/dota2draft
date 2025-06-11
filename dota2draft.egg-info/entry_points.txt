@@ -1,0 +1,2 @@
+[console_scripts]
+dota2draft = dota2draft_cli:app

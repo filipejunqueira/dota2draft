@@ -3,7 +3,7 @@
 # --- General Paths ---
 database_path: "opendota_league_info.db"
 csv_output_path: "lanes.csv"
-nn_artifacts_path: "nn_artifacts/"
+nn_artifacts_path: "nn_outputs/"
 log_file_path: "dota2draft.log"
 model_weights_path: "dota_draft_predictor_weights.pth"
 

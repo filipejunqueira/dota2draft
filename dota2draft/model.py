@@ -11,6 +11,8 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from typing import Dict, Optional, List # Added List for completeness
+from .db import DBManager # Added for type hinting
 from .config_loader import CONFIG
 from .logger_config import logger
 
@@ -46,7 +48,11 @@ class DraftLanePredictor(nn.Module):
     def forward(self, input_data):
         return self.network_layers(input_data)
 
-def parse_draft_string(draft_log_string, hero_to_index_map, num_total_hero_features):
+def parse_draft_string(draft_log_string: str, 
+                         hero_to_index_map: Dict[str, int], 
+                         num_total_hero_features: int, 
+                         db_manager: DBManager, 
+                         all_heroes_map: Dict[int, str]) -> Optional[torch.Tensor]:
     if not isinstance(draft_log_string, str) or not draft_log_string or draft_log_string.lower() == "n/a":
         return None
     draft_feature_vector = torch.zeros(num_total_hero_features)
@@ -55,13 +61,24 @@ def parse_draft_string(draft_log_string, hero_to_index_map, num_total_hero_featu
         action_match = re.match(r"(Radiant|Dire)\s+(Pick|Ban):\s*(.+)", single_action.strip(), re.IGNORECASE)
         if action_match:
             team_name, action_type, hero_name = action_match.groups()
-            if hero_name.strip() in hero_to_index_map:
-                hero_index = hero_to_index_map[hero_name.strip()]
-                if hero_index < num_total_hero_features:
-                    if team_name.lower() == "radiant":
-                        draft_feature_vector[hero_index] = 1.0 if action_type.lower() == "pick" else 0.5
-                    elif team_name.lower() == "dire":
-                        draft_feature_vector[hero_index] = -1.0 if action_type.lower() == "pick" else -0.5
+            hero_identifier_stripped = hero_name.strip()
+            hero_id = db_manager.resolve_hero_identifier(hero_identifier_stripped)
+            
+            if hero_id is not None:
+                canonical_hero_name = all_heroes_map.get(hero_id)
+                if canonical_hero_name and canonical_hero_name in hero_to_index_map:
+                    hero_index = hero_to_index_map[canonical_hero_name]
+                    if hero_index < num_total_hero_features:
+                        if team_name.lower() == "radiant":
+                            draft_feature_vector[hero_index] = 1.0 if action_type.lower() == "pick" else 0.5
+                        elif team_name.lower() == "dire":
+                            draft_feature_vector[hero_index] = -1.0 if action_type.lower() == "pick" else -0.5
+                    else:
+                        logger.warning(f"Resolved hero '{canonical_hero_name}' (from '{hero_identifier_stripped}') has index {hero_index} out of bounds for num_total_hero_features {num_total_hero_features}.")
+                else:
+                    logger.warning(f"Could not find canonical name '{canonical_hero_name}' for resolved hero ID {hero_id} (from '{hero_identifier_stripped}') in hero_to_index_map. Or canonical name is None.")
+            else:
+                logger.warning(f"Could not resolve hero identifier '{hero_identifier_stripped}' from draft string.")
     return draft_feature_vector
 
 def load_and_preprocess_data(csv_file_path, batch_processing_size):
@@ -214,10 +231,15 @@ def load_model_weights(model, file_path_override=None):
         logger.error(f"Error loading model weights from {os.path.abspath(file_path)}: {e}", exc_info=True)
         return None
 
-def predict_draft(model, draft_string, hero_to_index_map, num_heroes):
+def predict_draft(model, 
+                  draft_string: str, 
+                  hero_to_index_map: Dict[str, int], 
+                  num_heroes: int, 
+                  db_manager: DBManager, 
+                  all_heroes_map: Dict[int, str]):
     logger.info(f"Predicting for draft: {draft_string[:70]}...")
     model.eval()
-    vector = parse_draft_string(draft_string, hero_to_index_map, num_heroes)
+    vector = parse_draft_string(draft_string, hero_to_index_map, num_heroes, db_manager, all_heroes_map)
     if vector is None:
         logger.error("Could not parse the input draft string for prediction. Please check format.")
         return None
