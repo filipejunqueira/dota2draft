@@ -1,0 +1,67 @@
+2025-06-11 12:48:50 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:48:50 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:48:55 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:48:55 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:49:16 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:49:16 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:49:16 - dota2draft - INFO - Attempting to refresh all static data...
+2025-06-11 12:49:21 - dota2draft - INFO - [CACHE] Force refreshing hero map.
+2025-06-11 12:49:21 - dota2draft - INFO - [DB] Cleared 'heroes' table.
+2025-06-11 12:49:21 - dota2draft - INFO - [CACHE] Hero map not in cache or DB (or force refresh). Fetching from API.
+2025-06-11 12:49:21 - dota2draft - INFO - [API] Fetching hero stats...
+2025-06-11 12:49:21 - dota2draft - INFO - [DB] Stored/Updated 126 heroes.
+2025-06-11 12:49:21 - dota2draft - INFO - [CACHE] Hero map fetched from API, stored in DB, and cached. Found 126 heroes.
+2025-06-11 12:49:21 - dota2draft - INFO - [CACHE] Force refreshing team map.
+2025-06-11 12:49:21 - dota2draft - INFO - [DB] Cleared 'teams' table.
+2025-06-11 12:49:21 - dota2draft - INFO - [CACHE] Team map not in cache or DB (or force refresh). Fetching from API.
+2025-06-11 12:49:21 - dota2draft - INFO - [API] Fetching all teams...
+2025-06-11 12:49:22 - dota2draft - INFO - [DB] Stored/Updated 985 teams.
+2025-06-11 12:49:22 - dota2draft - INFO - [CACHE] Team map fetched from API, stored in DB, and cached. Found 985 teams.
+2025-06-11 12:49:22 - dota2draft - INFO - [CACHE] Force refreshing all leagues list.
+2025-06-11 12:49:22 - dota2draft - INFO - [DB] Cleared 'all_leagues' table.
+2025-06-11 12:49:22 - dota2draft - INFO - [CACHE] All leagues list not in cache or DB (or force refresh). Fetching from API.
+2025-06-11 12:49:22 - dota2draft - INFO - [API] Fetching all leagues...
+2025-06-11 12:49:23 - dota2draft - INFO - [DB] Stored/Updated 8517 in 'all_leagues'.
+2025-06-11 12:49:23 - dota2draft - INFO - [CACHE] All leagues list fetched from API, stored in DB, and cached. Found 8517 leagues.
+2025-06-11 12:49:23 - dota2draft - INFO - Static data refreshed successfully.
+2025-06-11 12:49:34 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:49:34 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:49:48 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:49:48 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:55:26 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:55:26 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:55:39 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:55:39 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:55:46 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:55:46 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:56:07 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:56:07 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:56:28 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:56:28 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:56:39 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:56:39 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:56:53 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:56:53 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:57:02 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:57:02 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:57:09 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:57:09 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:57:15 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:57:15 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 12:57:15 - dota2draft - INFO - Fetching all leagues from the database.
+2025-06-11 12:57:39 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 12:57:39 - dota2draft - INFO - Dota2Draft CLI application started.
+2025-06-11 13:07:11 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:07:50 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:11:20 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:11:20 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:20:16 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:20:16 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:20:16 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:20:16 - dota2draft - INFO - [DB] Match 12345 stored.
+2025-06-11 13:20:16 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:20:16 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:20:16 - dota2draft - INFO - [DB] Stored/Updated 3 heroes.
+2025-06-11 13:20:16 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:20:16 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:20:16 - dota2draft - INFO - Database connection to ':memory:' closed.

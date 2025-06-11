@@ -1,0 +1,13 @@
+requests
+typer
+rich
+torch
+scikit-learn
+matplotlib
+seaborn
+numpy
+networkx
+gravis
+PyYAML
+pytest==8.2.2
+pytest-mock==3.14.0

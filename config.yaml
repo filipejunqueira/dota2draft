@@ -1,0 +1,40 @@
+# Default configuration for Dota 2 Draft Assistant
+
+# --- General Paths ---
+database_path: "opendota_league_info.db"
+csv_output_path: "lanes.csv"
+nn_artifacts_path: "nn_artifacts/"
+log_file_path: "dota2draft.log"
+model_weights_path: "dota_draft_predictor_weights.pth"
+
+# --- KPI Parameters for Lane Analysis ---
+# (Mirrors the structure previously in dota2draft/analysis.py)
+kpi_parameters:
+  analysis_minute_mark: 10
+  kill_death_analysis_time_limit_seconds: 600
+  early_tower_kill_time_limit_seconds: 720
+  score_weights:
+    major_gold_lead_per_laner_threshold: 750
+    minor_gold_lead_per_laner_threshold: 300
+    major_xp_lead_per_laner_threshold: 1000
+    minor_xp_lead_per_laner_threshold: 500
+    points_for_major_lead: 2
+    points_for_minor_lead: 1
+    kill_difference_for_major_points: 2
+    points_for_major_kill_difference: 2
+    kill_difference_for_minor_points: 1
+    points_for_minor_kill_difference: 1
+    points_for_early_tower_kill: 3
+  display_secondary_minute_mark: 8
+
+# --- Neural Network Default Training Parameters ---
+nn_training_defaults:
+  num_heroes_input: 132 # Should ideally be dynamic based on dataset, but can be a default
+  hidden_layer_size1: 128
+  hidden_layer_size2: 256
+  hidden_layer_size3: 128
+  hidden_layer_size4: 64
+  output_layer_size: 6
+  epochs: 50
+  batch_size: 10
+  learning_rate: 0.001
