@@ -65,3 +65,131 @@
 2025-06-11 13:20:16 - dota2draft - INFO - [DB] Match 101 stored.
 2025-06-11 13:20:16 - dota2draft - INFO - [DB] Match 102 stored.
 2025-06-11 13:20:16 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:22:03 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:22:03 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:22:03 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:22:03 - dota2draft - INFO - [DB] Match 12345 stored.
+2025-06-11 13:22:03 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:22:03 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:22:03 - dota2draft - INFO - [DB] Stored/Updated 3 heroes.
+2025-06-11 13:22:03 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:22:03 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:22:03 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:22:29 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 13:22:29 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:22:29 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:22:29 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:22:29 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:22:29 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:22:29 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:22:29 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:22:29 - dota2draft - INFO - [DB] Match 12345 stored.
+2025-06-11 13:22:29 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:22:29 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:22:29 - dota2draft - INFO - [DB] Stored/Updated 3 heroes.
+2025-06-11 13:22:29 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:22:29 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:22:29 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:23:04 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 13:23:04 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:23:04 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:23:04 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:23:04 - dota2draft - INFO - Calculating hero stats. League filter: None. Date filter: None
+2025-06-11 13:23:08 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:23:08 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:23:08 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:23:08 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:23:08 - dota2draft - INFO - [DB] Match 12345 stored.
+2025-06-11 13:23:08 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:23:08 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:23:08 - dota2draft - INFO - [DB] Stored/Updated 3 heroes.
+2025-06-11 13:23:08 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:23:08 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:23:08 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:23:59 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 13:23:59 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:23:59 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:23:59 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:23:59 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:23:59 - dota2draft - INFO - Calculating hero stats. League filter: None. Date filter: None
+2025-06-11 13:24:02 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:24:02 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:24:02 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:24:02 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:24:02 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:24:02 - dota2draft - INFO - Calculating hero stats. League filter: None. Date filter: 2023-01-02
+2025-06-11 13:24:06 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:24:06 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:24:06 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:24:06 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:24:06 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:24:06 - dota2draft - INFO - Calculating player stats. League filter: None. Date filter: None
+2025-06-11 13:24:09 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:24:09 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:24:09 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:24:09 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:24:09 - dota2draft - INFO - [DB] Match 12345 stored.
+2025-06-11 13:24:09 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:24:09 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:24:09 - dota2draft - INFO - [DB] Stored/Updated 3 heroes.
+2025-06-11 13:24:09 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:24:09 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:24:09 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:25:47 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 13:25:47 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:25:47 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:25:47 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:25:47 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:25:47 - dota2draft - INFO - Calculating hero stats. League filter: None. Date filter: None
+2025-06-11 13:25:51 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:25:51 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:25:51 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:25:51 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:25:51 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:25:51 - dota2draft - INFO - Calculating hero stats. League filter: None. Date filter: 2023-01-02
+2025-06-11 13:25:55 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:25:55 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:25:55 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:25:55 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:25:55 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:25:55 - dota2draft - INFO - Calculating player stats. League filter: None. Date filter: None
+2025-06-11 13:25:58 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:25:58 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:25:58 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:25:58 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:25:58 - dota2draft - INFO - [DB] Match 12345 stored.
+2025-06-11 13:25:58 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:25:58 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:25:58 - dota2draft - INFO - [DB] Stored/Updated 3 heroes.
+2025-06-11 13:25:58 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:25:58 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:25:58 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:27:59 - dota2draft - INFO - Database 'opendota_league_info.db' initialized/checked.
+2025-06-11 13:27:59 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - Calculating hero stats. League filter: None. Date filter: None
+2025-06-11 13:27:59 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:27:59 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - Calculating hero stats. League filter: None. Date filter: 2023-01-02
+2025-06-11 13:27:59 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:27:59 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Stored/Updated 2 heroes.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - Calculating player stats. League filter: None. Date filter: None
+2025-06-11 13:27:59 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:27:59 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:27:59 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:27:59 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 12345 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - Database connection to ':memory:' closed.
+2025-06-11 13:27:59 - dota2draft - INFO - Database ':memory:' initialized/checked.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Stored/Updated 3 heroes.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 101 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - [DB] Match 102 stored.
+2025-06-11 13:27:59 - dota2draft - INFO - Database connection to ':memory:' closed.

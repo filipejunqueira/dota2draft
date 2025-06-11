@@ -2,7 +2,7 @@
 
 import sqlite3
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timezone
 from typing import List, Optional, Dict, Any
 from .config_loader import CONFIG
 from .logger_config import logger
@@ -223,7 +223,9 @@ class DBManager:
         start_timestamp = 0
         if after_date:
             try:
-                start_timestamp = int(datetime.strptime(after_date, "%Y-%m-%d").timestamp())
+                # Make the datetime object timezone-aware (UTC) before creating the timestamp
+                dt = datetime.strptime(after_date, "%Y-%m-%d")
+                start_timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp())
             except ValueError:
                 logger.error(f"Invalid date format for after_date: '{after_date}'. Please use YYYY-MM-DD.")
                 return []
@@ -288,7 +290,9 @@ class DBManager:
         start_timestamp = 0
         if after_date:
             try:
-                start_timestamp = int(datetime.strptime(after_date, "%Y-%m-%d").timestamp())
+                # Make the datetime object timezone-aware (UTC) before creating the timestamp
+                dt = datetime.strptime(after_date, "%Y-%m-%d")
+                start_timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp())
             except ValueError:
                 logger.error(f"Invalid date format for after_date: '{after_date}'. Please use YYYY-MM-DD.")
                 return []

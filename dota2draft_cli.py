@@ -124,13 +124,13 @@ def hero_stats(
         return
 
     total_matches = stats[0]['total_matches'] if stats else 0
-    title = f"Hero Statistics (Total Matches: {total_matches})"
-    if league_id:
-        title += f" - League ID: {league_id}"
+    title = "Hero Statistics"
     if after_date:
-        title += f" - After {after_date}"
+        title += f" (after {after_date})"
+    elif league_id:
+        title += f" (League ID: {league_id})"
 
-    table = Table(title=title, show_header=True, header_style="bold blue")
+    table = Table(title=title, show_header=True, header_style="bold blue", caption=f"Based on {total_matches} matches")
     table.add_column("Hero")
     table.add_column("Picks", justify="right")
     table.add_column("Bans", justify="right")
@@ -178,7 +178,8 @@ def player_stats(
     table.add_column("Wins", justify="right")
     table.add_column("Win Rate %", justify="right")
 
-    for player in sorted(stats, key=lambda x: x['name']):
+    # Sort by player name, handling cases where the name might be None
+    for player in sorted(stats, key=lambda x: x.get('name') or ''):
         win_rate = (player['wins'] / player['matches_played'] * 100) if player['matches_played'] > 0 else 0
         table.add_row(
             player['name'],
