@@ -115,12 +115,12 @@ class DataService:
         logger.warning("[CACHE] Failed to fetch all leagues list from API.")
         return []
 
-    def get_match_details(self, match_id: int, force_refresh: bool = False) -> Tuple[FetchStatus, Optional[Dict[str, Any]]]:
+    def get_match_details(self, match_id: int, league_id: int, force_refresh: bool = False) -> Tuple[FetchStatus, Optional[Dict[str, Any]]]:
         """
         Gets details for a specific match, using the database as a cache.
         Returns a status tuple indicating the outcome.
         """
-        logger.debug(f"Getting match details for ID: {match_id}, Force refresh: {force_refresh}")
+        logger.debug(f"Getting match details for ID: {match_id}, League: {league_id}, Force refresh: {force_refresh}")
         if not force_refresh:
             db_data = self.db_manager.get_match_data(match_id)
             if db_data:
@@ -131,8 +131,9 @@ class DataService:
         try:
             api_data = self.api_client.fetch_match_details(match_id)
             if api_data:
-                self.db_manager.store_match_data(match_id, api_data)
-                logger.info(f"Match {match_id} fetched from API and stored in DB.")
+                # Pass league_id to the storage function
+                self.db_manager.store_match_data(match_id, league_id, api_data)
+                logger.info(f"Match {match_id} fetched from API and stored in DB for league {league_id}.")
                 return FetchStatus.ADDED, api_data
             else:
                 logger.warning(f"Failed to fetch match {match_id} from API (no data returned).")

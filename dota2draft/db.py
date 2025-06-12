@@ -2,7 +2,7 @@
 
 import sqlite3
 import json
-from datetime import datetime, timezone, timezone
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from .config_loader import CONFIG
 from .logger_config import logger
@@ -36,12 +36,22 @@ class DBManager:
         """Creates all necessary tables if they don't already exist."""
         try:
             cursor = self.conn.cursor()
+            # Check if 'league_id' column exists in 'matches' table and add it if not.
+            cursor.execute("PRAGMA table_info(matches)")
+            columns = [column['name'] for column in cursor.fetchall()]
+            if 'league_id' not in columns:
+                # Adding with a default or allowing NULL. Defaulting to 0 for unknown.
+                cursor.execute("ALTER TABLE matches ADD COLUMN league_id INTEGER DEFAULT 0")
+                logger.info("Added 'league_id' column to 'matches' table.")
+
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS matches (
                 match_id INTEGER PRIMARY KEY,
+                league_id INTEGER,
                 data TEXT NOT NULL,
                 fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
             )""")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_matches_league_id ON matches (league_id);")
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS heroes (
                 hero_id INTEGER PRIMARY KEY,
@@ -61,7 +71,6 @@ class DBManager:
                 tier TEXT,
                 fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
             )""")
-            cursor.execute("DROP TABLE IF EXISTS player_nicknames;")
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS player_nicknames (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +91,17 @@ class DBManager:
             )""")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_hero_nicknames_hero_id ON hero_nicknames (hero_id);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_hero_nicknames_nickname ON hero_nicknames (nickname);")
-            
+
+            # Failed Matches Table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS failed_matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                league_id INTEGER NOT NULL,
+                match_id INTEGER NOT NULL,
+                UNIQUE(league_id, match_id)
+            )""")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_failed_matches_league_id ON failed_matches (league_id);")
+
             self.conn.commit()
             logger.info(f"Database '{self.db_name}' initialized/checked.")
         except sqlite3.Error as e:
@@ -103,16 +122,16 @@ class DBManager:
             logger.error(f"SQLite error getting match {match_id}: {e}")
             return None
 
-    def store_match_data(self, match_id: int, match_data: Dict[str, Any]):
+    def store_match_data(self, match_id: int, league_id: int, match_data: Dict[str, Any]):
         """Stores a specific match's full details into the database."""
         try:
             match_data_json = json.dumps(match_data)
             self.conn.execute(
-                "INSERT OR REPLACE INTO matches (match_id, data, fetched_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
-                (match_id, match_data_json)
+                "INSERT OR REPLACE INTO matches (match_id, league_id, data, fetched_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+                (match_id, league_id, match_data_json)
             )
             self.conn.commit()
-            logger.info(f"[DB] Match {match_id} stored.")
+            logger.info(f"[DB] Match {match_id} from league {league_id} stored.")
         except sqlite3.Error as e:
             logger.error(f"SQLite error storing match {match_id}: {e}")
 
@@ -238,6 +257,44 @@ class DBManager:
             logger.error(f"SQLite error searching for leagues with keyword '{name_keyword}': {e}")
             return []
 
+    def get_league_name_by_id(self, league_id: int) -> Optional[str]:
+        """Retrieves a specific league's name from the database by its ID."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT name FROM all_leagues WHERE league_id = ?", (league_id,))
+            row = cursor.fetchone()
+            if row:
+                logger.debug(f"[DB] Found league name for ID {league_id}: {row['name']}.")
+                return row["name"]
+            logger.debug(f"[DB] League with ID {league_id} not found.")
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error getting league name for ID {league_id}: {e}")
+            return None
+
+    def get_leagues_with_matches(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves information for leagues that have at least one match stored in the database.
+        """
+        try:
+            cursor = self.conn.cursor()
+            query = """
+                SELECT DISTINCT
+                    al.league_id,
+                    al.name,
+                    al.tier
+                FROM all_leagues al
+                JOIN matches m ON al.league_id = m.league_id
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            leagues_list = [{"league_id": r["league_id"], "name": r["name"], "tier": r["tier"]} for r in rows]
+            logger.debug(f"[DB] Found {len(leagues_list)} leagues with downloaded matches.")
+            return leagues_list
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error getting downloaded leagues info: {e}")
+            return []
+
     def get_hero_stats(self, league_id: Optional[int] = None, after_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """Calculates hero statistics from stored match data."""
         hero_stats = {}
@@ -361,6 +418,59 @@ class DBManager:
         except (sqlite3.Error, json.JSONDecodeError) as e:
             logger.error(f"Error getting player stats: {e}")
             return []
+
+    def log_failed_match(self, league_id: int, match_id: int):
+        """Logs a match that failed to download for later retry."""
+        try:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO failed_matches (league_id, match_id) VALUES (?, ?)",
+                (league_id, match_id)
+            )
+            self.conn.commit()
+            logger.warning(f"[DB] Logged failed download for match {match_id} in league {league_id}.")
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error logging failed match {match_id}: {e}")
+
+    def get_failed_matches(self, league_id: int) -> List[int]:
+        """Retrieves all failed match IDs for a given league."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT match_id FROM failed_matches WHERE league_id = ?", (league_id,))
+            rows = cursor.fetchall()
+            failed_ids = [row['match_id'] for row in rows]
+            logger.info(f"[DB] Found {len(failed_ids)} failed matches for league {league_id}.")
+            return failed_ids
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error getting failed matches for league {league_id}: {e}")
+            return []
+
+    def remove_failed_match(self, match_id: int):
+        """Removes a match from the failed_matches table, e.g., after a successful download."""
+        try:
+            self.conn.execute("DELETE FROM failed_matches WHERE match_id = ?", (match_id,))
+            self.conn.commit()
+            logger.info(f"[DB] Removed match {match_id} from failed downloads list.")
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error removing failed match {match_id}: {e}")
+
+    def delete_league_data(self, league_id: int) -> int:
+        """Deletes all matches associated with a given league_id."""
+        try:
+            cursor = self.conn.cursor()
+            # First, count how many rows will be deleted for logging purposes
+            cursor.execute("SELECT COUNT(*) FROM matches WHERE league_id = ?", (league_id,))
+            count = cursor.fetchone()[0]
+
+            if count > 0:
+                cursor.execute("DELETE FROM matches WHERE league_id = ?", (league_id,))
+                self.conn.commit()
+                logger.info(f"[DB] Deleted {count} matches for league ID {league_id}.")
+            else:
+                logger.info(f"[DB] No matches found for league ID {league_id} to delete.")
+            return count
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error deleting data for league {league_id}: {e}")
+            return 0
 
     def set_player_nickname(self, account_id: int, nickname: str) -> bool:
         """Assigns a nickname to a player. Nicknames are unique (case-insensitive)."""
@@ -573,14 +683,24 @@ class DBManager:
             logger.error(f"SQLite error getting downloaded leagues info: {e}")
             return []
 
-    def get_stats_for_player(self, account_id: int) -> Optional[Dict[str, Any]]:
-        """Calculates detailed statistics for a single player."""
+    def get_stats_for_player(self, account_id: int, league_id: Optional[int] = None, after_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Calculates detailed statistics for a single player, with optional filters for league and date."""
         player_stats = {
             "matches_played": 0,
             "wins": 0,
             "heroes_played": {}
         }
         player_name = None
+
+        # Date filtering setup
+        start_timestamp = 0
+        if after_date:
+            try:
+                dt = datetime.strptime(after_date, "%Y-%m-%d")
+                start_timestamp = int(dt.replace(tzinfo=timezone.utc).timestamp())
+            except ValueError:
+                logger.error(f"Invalid date format for after_date: '{after_date}'. Please use YYYY-MM-DD. Stats will be calculated without date filtering.")
+                start_timestamp = 0 # Proceed without date filter if format is wrong
 
         try:
             cursor = self.conn.cursor()
@@ -589,8 +709,18 @@ class DBManager:
 
             for row in all_matches_raw:
                 match_data = json.loads(row['data'])
+
+                # Apply league_id filter
+                if league_id is not None and match_data.get("leagueid") != league_id:
+                    continue
+
+                # Apply after_date filter
+                current_match_start_time = match_data.get('start_time', 0)
+                if start_timestamp > 0 and current_match_start_time < start_timestamp:
+                    continue
                 
-                if not match_data.get("players"):
+                if not match_data.get("players"): # Ensure 'players' key exists
+                    logger.debug(f"Match {match_data.get('match_id', 'Unknown')} has no player data, skipping.")
                     continue
 
                 for player in match_data["players"]:
@@ -602,7 +732,10 @@ class DBManager:
 
                         is_radiant_player = player.get("isRadiant", player.get("player_slot", 0) < 128)
                         radiant_win = match_data.get("radiant_win", False)
-                        if (is_radiant_player and radiant_win) or (not is_radiant_player and not radiant_win):
+                        player_won = (is_radiant_player and radiant_win) or \
+                                     (not is_radiant_player and not radiant_win)
+
+                        if player_won:
                             player_stats["wins"] += 1
 
                         hero_id = player.get("hero_id")
@@ -611,25 +744,25 @@ class DBManager:
                                 player_stats["heroes_played"][hero_id] = {"plays": 0, "wins": 0}
                             
                             player_stats["heroes_played"][hero_id]["plays"] += 1
-                            if (is_radiant_player and radiant_win) or (not is_radiant_player and not radiant_win):
+                            if player_won:
                                 player_stats["heroes_played"][hero_id]["wins"] += 1
-            
+        
             if player_stats["matches_played"] == 0:
-                logger.warning(f"No matches found for player {account_id}.")
+                logger.info(f"No matches found for player {account_id} with the given filters (League: {league_id}, After Date: {after_date}).")
                 return None
 
             player_stats["win_rate"] = (player_stats["wins"] / player_stats["matches_played"]) * 100 if player_stats["matches_played"] > 0 else 0
+            player_stats["player_name"] = player_name if player_name else "Unknown Player"
             
-            player_stats["player_name"] = player_name
-            
-            all_heroes = self.get_all_heroes()
+            all_heroes_map = self.get_all_heroes()
             for hero_id, stats in player_stats["heroes_played"].items():
-                stats["hero_name"] = all_heroes.get(hero_id, "Unknown Hero")
+                stats["hero_name"] = all_heroes_map.get(hero_id, "Unknown Hero")
+                stats["win_rate"] = (stats["wins"] / stats["plays"]) * 100 if stats["plays"] > 0 else 0
 
             return player_stats
 
         except (sqlite3.Error, json.JSONDecodeError) as e:
-            logger.error(f"Error getting stats for player {account_id}: {e}")
+            logger.error(f"Error getting stats for player {account_id} (League: {league_id}, After Date: {after_date}): {e}")
             return None
 
     def clear_all_leagues_table(self):

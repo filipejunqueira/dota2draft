@@ -1,5 +1,5 @@
 requests
-typer
+typer[all]
 rich
 torch
 scikit-learn
@@ -9,5 +9,9 @@ numpy
 networkx
 gravis
 PyYAML
+questionary>=1.10.0
+graphql-core
+
+# Testing
 pytest==8.2.2
 pytest-mock==3.14.0

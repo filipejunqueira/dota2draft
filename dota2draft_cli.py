@@ -8,6 +8,7 @@ from rich.progress import Progress
 import csv
 import os
 import json # Added for json output in analyze_lanes
+from typing import List, Tuple # For type hinting
 
 # Import modules from the new package structure
 from dota2draft.db import DBManager
@@ -20,7 +21,8 @@ from dota2draft.model import (
     plot_training_loss, plot_evaluation_results
 )
 from dota2draft.config_loader import CONFIG
-from dota2draft.logger_config import logger # Import the configured logger
+from dota2draft.logger_config import logger
+import json # Import the configured logger
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -39,10 +41,12 @@ nn_app = typer.Typer(help="Commands for Neural Network training and prediction."
 leagues_app = typer.Typer(help="Commands for viewing and searching leagues.")
 players_app = typer.Typer(help="Commands for managing and viewing player data.")
 heroes_app = typer.Typer(help="Commands for hero-specific data and statistics.")
+matches_app = typer.Typer()
 
 app.add_typer(nn_app, name="nn")
 app.add_typer(leagues_app, name="leagues")
-app.add_typer(players_app, name="players")
+app.add_typer(players_app, name="players", help="Manage player nicknames and view player stats.")
+app.add_typer(matches_app, name="matches", help="Commands for interacting with individual match data.")
 app.add_typer(heroes_app, name="heroes")
 
 # Instantiate core components
@@ -116,7 +120,7 @@ def search_leagues(keyword: str = typer.Argument(..., help="Keyword to search fo
 @leagues_app.command(name="downloaded", help="List leagues with locally stored match data.")
 def list_downloaded_leagues():
     logger.info("Fetching downloaded leagues from the database.")
-    leagues = db_manager.get_downloaded_leagues_info()
+    leagues = db_manager.get_leagues_with_matches()
     if not leagues:
         logger.warning("No downloaded leagues found with match data.")
         console.print("[yellow]No leagues with downloaded match data found. Use 'fetch-league <league_id>' to download matches.[/yellow]")
@@ -131,6 +135,118 @@ def list_downloaded_leagues():
         table.add_row(str(league['league_id']), league['name'], league.get('tier', 'N/A'))
     
     console.print(table)
+
+
+def _fetch_and_process_matches(match_ids: List[int], league_id: int, force_refresh: bool):
+    """Helper function to fetch, process, and report match download status."""
+    if not match_ids:
+        console.print("[yellow]No match IDs provided to fetch.[/yellow]")
+        return
+
+    added_count = 0
+    skipped_count = 0
+    failed_count = 0
+
+    with Progress(console=console) as progress:
+        task = progress.add_task("[green]Processing matches...", total=len(match_ids))
+        for match_id in match_ids:
+            status, _ = data_service.get_match_details(match_id, league_id, force_refresh=force_refresh)
+            if status == FetchStatus.ADDED:
+                added_count += 1
+                # If it was successfully added, ensure it's not in the failed list
+                db_manager.remove_failed_match(match_id)
+            elif status == FetchStatus.SKIPPED:
+                skipped_count += 1
+            elif status == FetchStatus.FAILED:
+                failed_count += 1
+                # Log the failure to the database for later retry
+                db_manager.log_failed_match(league_id, match_id)
+            progress.update(task, advance=1)
+
+    summary_panel = Panel(
+        f"[bold green]Added/Updated: {added_count}[/bold green]\n"
+        f"[bold yellow]Skipped (already exist): {skipped_count}[/bold yellow]\n"
+        f"[bold red]Failed: {failed_count}[/bold red] (logged for retry)",
+        title=f"Processing Summary for League {league_id}",
+        border_style="blue"
+    )
+    console.print(summary_panel)
+    logger.info(f"Processing summary for league {league_id}: Added={added_count}, Skipped={skipped_count}, Failed={failed_count}")
+
+@leagues_app.command(name="fetch", help="Fetch all match details for a given league.")
+def fetch_league_command(
+    league_id: int = typer.Argument(..., help="The ID of the league to fetch."),
+    force_refresh: bool = typer.Option(False, "--force-refresh", "-f", help="Force re-downloading of matches even if they exist.")
+):
+    logger.info(f"Starting match fetch for league ID: {league_id}, Force refresh: {force_refresh}")
+    console.print(f"Fetching match IDs for league [cyan]{league_id}[/cyan] from API...")
+    
+    match_ids = api_client.fetch_matches_for_league(league_id)
+    if not match_ids:
+        logger.warning(f"No matches found via API for league ID: {league_id}")
+        console.print(f"[yellow]Could not find any matches for league ID {league_id} via the API.[/yellow]")
+        return
+    
+    _fetch_and_process_matches(match_ids, league_id, force_refresh)
+
+@leagues_app.command(name="retry-failed", help="Retry downloading matches that previously failed for a league.")
+def retry_failed_command(league_id: int = typer.Argument(..., help="The ID of the league to retry failed downloads for.")):
+    logger.info(f"Retrying failed downloads for league ID: {league_id}")
+    failed_match_ids = db_manager.get_failed_matches(league_id)
+    
+    if not failed_match_ids:
+        console.print(f"[green]No failed downloads logged for league ID {league_id}. Nothing to do.[/green]")
+        return
+
+    console.print(f"Found [cyan]{len(failed_match_ids)}[/cyan] failed matches to retry for league {league_id}.")
+    # For retries, we always want to force a refresh attempt, regardless of cache.
+    _fetch_and_process_matches(failed_match_ids, league_id, force_refresh=True)
+
+@leagues_app.command(name="list-failed", help="List all matches that failed to download for a league.")
+def list_failed_command(league_id: int = typer.Argument(..., help="The ID of the league to list failed downloads for.")):
+    logger.info(f"Listing failed downloads for league ID: {league_id}")
+    failed_match_ids = db_manager.get_failed_matches(league_id)
+    
+    if not failed_match_ids:
+        console.print(f"[green]No failed downloads logged for league ID {league_id}.[/green]")
+        return
+
+    table = Table(title=f"Failed Match Downloads for League {league_id}", show_header=True, header_style="bold red")
+    table.add_column("Match ID", style="cyan")
+    for match_id in failed_match_ids:
+        table.add_row(str(match_id))
+    console.print(table)
+
+@leagues_app.command(name="delete", help="Delete all match data for a specific league.")
+def delete_league(
+    league_id: int = typer.Argument(..., help="The ID of the league to delete."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Bypass confirmation prompt.", show_default=False),
+):
+    logger.warning(f"Initiating deletion for league ID: {league_id}. User confirmation required.")
+    
+    # Get some info before deleting for the confirmation message
+    leagues = db_manager.get_all_leagues()
+    league_name = next((l['name'] for l in leagues if l['leagueid'] == league_id), f"ID {league_id}")
+    
+    console.print(Panel(
+        f"You are about to permanently delete all match data for league: [bold red]{league_name}[/bold red].\n"
+        f"This action cannot be undone.",
+        title="[bold yellow]WARNING[/bold yellow]",
+        border_style="red"
+    ))
+    
+    if not yes:
+        if not typer.confirm(
+            f"Are you sure you want to proceed?",
+            abort=True,
+        ):
+            logger.info("User aborted league data deletion.")
+            console.print("Deletion cancelled.")
+            raise typer.Abort()
+
+    logger.info(f"User confirmed deletion for league {league_id}.")
+    deleted_count = db_manager.delete_league_data(league_id)
+    console.print(f"[green]Successfully deleted {deleted_count} matches for league {league_name}.[/green]")
 
 # --- Hero Commands ---
 @heroes_app.command(name="stats", help="Display hero statistics from stored matches.")
@@ -417,57 +533,10 @@ def refresh_static_data_command():
     logger.info("Static data refreshed successfully.")
     console.print(Panel("[bold green]Static data refreshed successfully![/bold green]"))
 
-@app.command(name="fetch-league", help="Fetch and store all matches for a given league ID.")
-def populate_league_matches_command(
-    league_id: int = typer.Argument(..., help="The ID of the league to populate."),
-    force_refresh: bool = typer.Option(False, "--force-refresh", "-f", help="Force re-downloading of matches even if they exist in the DB.")
-):
-    """Fetches match data for a league, with progress, error handling, and a summary."""
-    logger.info(f"Fetching match summaries for league {league_id} (Force refresh: {force_refresh})...")
-    console.print(f"Fetching match summaries for league [bold cyan]{league_id}[/]...")
-    matches = api_client.fetch_league_matches_summary(league_id)
-    if not matches:
-        logger.warning(f"Could not fetch matches for league {league_id}, or league has no matches.")
-        console.print(f"[yellow]Could not fetch matches for league {league_id}, or the league has no matches.[/yellow]")
-        raise typer.Exit()
-
-    total_matches = len(matches)
-    console.print(f"Found {total_matches} matches. Processing details...")
-
-    added_count = 0
-    skipped_count = 0
-    failed_count = 0
-
-    with Progress(console=console) as progress:
-        task = progress.add_task("[cyan]Downloading matches...", total=total_matches)
-        for match_summary in matches:
-            match_id = match_summary['match_id']
-            status, _ = data_service.get_match_details(match_id, force_refresh=force_refresh)
-            if status == FetchStatus.ADDED:
-                added_count += 1
-            elif status == FetchStatus.SKIPPED:
-                skipped_count += 1
-            elif status == FetchStatus.FAILED:
-                failed_count += 1
-            progress.update(task, advance=1, description=f"[cyan]Processing match {match_id}...[/]")
-
-    # --- Print Summary ---
-    summary_table = Table(title="[bold]League Fetch Summary[/bold]", show_header=True, header_style="bold magenta")
-    summary_table.add_column("Status", style="dim")
-    summary_table.add_column("Count", justify="right")
-
-    summary_table.add_row("[green]Newly Added[/green]", str(added_count))
-    summary_table.add_row("[yellow]Skipped (Exists)[/yellow]", str(skipped_count))
-    summary_table.add_row("[red]Failed[/red]", str(failed_count))
-    summary_table.add_row("[bold]Total Processed[/bold]", str(total_matches))
-
-    console.print(summary_table)
-    logger.info(f"League fetch complete for {league_id}. Added: {added_count}, Skipped: {skipped_count}, Failed: {failed_count}.")
-
 @app.command(name="get-draft", help="Display the draft for a specific match ID.")
 def get_draft_details_command(match_id: int = typer.Argument(..., help="The Match ID.")):
     logger.info(f"Fetching draft details for match ID: {match_id}")
-    status, match_details = data_service.get_match_details(match_id)
+    status, match_details = data_service.get_match_details(match_id, league_id=None)
     if match_details:
         hero_map = data_service.get_hero_map()
         display_draft_info(match_details, hero_map)
@@ -482,7 +551,7 @@ def analyze_lanes_command(
 ):
     logger.info(f"Performing lane analysis for match ID: {match_id}, format: {output_format}")
     hero_map = data_service.get_hero_map()
-    match_data = data_service.get_match_details(match_id)
+    status, match_data = data_service.get_match_details(match_id, league_id=None)
     if not match_data:
         logger.error(f"Could not get match data for {match_id} to perform analysis.")
         console.print(f"[red]Could not get match data for {match_id}.[/red]")
@@ -655,6 +724,36 @@ def nn_predict_command(
     else:
         logger.warning("Prediction did not return scores.")
         # predict_draft logs if parsing fails
+
+# --- Matches Command Implementations ---
+@matches_app.command(name="export", help="Export all raw data for a specific match to JSON.")
+def export_match_data_command(
+    match_id: int = typer.Argument(..., help="The ID of the match to export."),
+    output_file: str = typer.Option(None, "--out", "-o", help="Path to save the JSON output file.")
+):
+    """Exports the raw JSON data of a single match from the database."""
+    logger.info(f"Attempting to export data for match ID: {match_id}")
+    match_data = db_manager.get_match_data(match_id)
+
+    if not match_data:
+        console.print(f":x: [bold red]Error:[/bold red] Match with ID [yellow]{match_id}[/yellow] not found in the database.")
+        raise typer.Exit(code=1)
+
+    if output_file:
+        try:
+            with open(output_file, 'w') as f:
+                json.dump(match_data, f, indent=4)
+            console.print(f":floppy_disk: [bold green]Success:[/bold green] Match data for ID {match_id} has been exported to [cyan]{output_file}[/cyan].")
+        except IOError as e:
+            logger.error(f"Error writing to file {output_file}: {e}")
+            console.print(f":x: [bold red]Error:[/bold red] Could not write to file [yellow]{output_file}[/yellow].")
+            raise typer.Exit(code=1)
+    else:
+        # Pretty print JSON to console
+        from rich.json import JSON
+        from rich.panel import Panel
+        console.print(Panel(JSON.from_data(match_data), title=f"Match Data for ID {match_id}", border_style="blue"))
+
 
 if __name__ == "__main__":
     logger.info("Dota2Draft CLI application started.")
