@@ -5,27 +5,23 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress
+# Standard library imports
 import csv
+import json
 import os
-import json # Added for json output in analyze_lanes
-from typing import List, Tuple # For type hinting
+from typing import List, Tuple
 
-# Import modules from the new package structure
+# Third-party imports
+
+# Package imports
 from dota2draft.db import DBManager
 from dota2draft.api import OpenDotaAPIClient
 from dota2draft.core import DataService, FetchStatus
 from dota2draft.analysis import perform_core_lane_analysis_for_match, visualize_json_structure, _get_hero_display_name_from_hero_id
-from dota2draft.model import (
-    DraftLanePredictor, load_and_preprocess_data, train_model, evaluate_model, 
-    save_model_weights, load_model_weights, predict_draft, 
-    plot_training_loss, plot_evaluation_results
-)
 from dota2draft.config_loader import CONFIG
 from dota2draft.logger_config import logger
-import json # Import the configured logger
-import torch
-import torch.nn as nn
-import torch.optim as optim
+from dota2draft.validation import validate_match_id, validate_league_id, validate_draft_string
+from dota2draft.exceptions import DataValidationError
 
 # --- Initialization ---
 console = Console() # Keep for Rich-specific output like tables/panels
@@ -37,13 +33,11 @@ app = typer.Typer(
         border_style="blue"
     )
 )
-nn_app = typer.Typer(help="Commands for Neural Network training and prediction.")
 leagues_app = typer.Typer(help="Commands for viewing and searching leagues.")
 players_app = typer.Typer(help="Commands for managing and viewing player data.")
 heroes_app = typer.Typer(help="Commands for hero-specific data and statistics.")
 matches_app = typer.Typer()
 
-app.add_typer(nn_app, name="nn")
 app.add_typer(leagues_app, name="leagues")
 app.add_typer(players_app, name="players", help="Manage player nicknames and view player stats.")
 app.add_typer(matches_app, name="matches", help="Commands for interacting with individual match data.")
@@ -549,27 +543,33 @@ def analyze_lanes_command(
     match_id: int = typer.Argument(..., help="The Match ID to analyze."),
     output_format: str = typer.Option("table", "--format", help="Output format: 'table' or 'json'.")
 ):
-    logger.info(f"Performing lane analysis for match ID: {match_id}, format: {output_format}")
+    try:
+        # Validate match ID
+        validated_match_id = validate_match_id(match_id)
+        logger.info(f"Performing lane analysis for match ID: {validated_match_id}, format: {output_format}")
+    except DataValidationError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1)
     hero_map = data_service.get_hero_map()
-    status, match_data = data_service.get_match_details(match_id, league_id=None)
+    status, match_data = data_service.get_match_details(validated_match_id, league_id=None)
     if not match_data:
-        logger.error(f"Could not get match data for {match_id} to perform analysis.")
-        console.print(f"[red]Could not get match data for {match_id}.[/red]")
+        logger.error(f"Could not get match data for {validated_match_id} to perform analysis.")
+        console.print(f"[red]Could not get match data for {validated_match_id}.[/red]")
         raise typer.Exit(code=1)
     
     analysis_results = perform_core_lane_analysis_for_match(match_data, hero_map)
     
     if analysis_results.get("error"):
-        logger.error(f"Analysis Error for match {match_id}: {analysis_results['error']}")
+        logger.error(f"Analysis Error for match {validated_match_id}: {analysis_results['error']}")
         console.print(f"[red]Analysis Error: {analysis_results['error']}[/red]")
         raise typer.Exit(code=1)
 
     if output_format.lower() == 'json':
-        logger.debug(f"Outputting analysis for match {match_id} in JSON format.")
+        logger.debug(f"Outputting analysis for match {validated_match_id} in JSON format.")
         console.print(json.dumps(analysis_results, indent=2))
     elif output_format.lower() == 'table':
-        logger.debug(f"Outputting analysis for match {match_id} in table format.")
-        table = Table(title=f"Laning Phase Analysis for Match {match_id}", show_header=True, header_style="bold blue")
+        logger.debug(f"Outputting analysis for match {validated_match_id} in table format.")
+        table = Table(title=f"Laning Phase Analysis for Match {validated_match_id}", show_header=True, header_style="bold blue")
         table.add_column("Lane")
         table.add_column("Radiant Score", justify="right")
         table.add_column("Dire Score", justify="right")
@@ -617,7 +617,7 @@ def export_analysis_command(
                 analysis = perform_core_lane_analysis_for_match(match_data_item, hero_map)
                 row = {
                     'match_id': analysis.get('match_id'),
-                    'draft_order': str(i + 1),  # Display order as 1-indexed
+                    'draft_order': analysis.get('draft_order'),  # Use actual draft order from analysis
                     'analysis_error_message': analysis.get('analysis_error_message')
                 }
                 for lane in ['top', 'mid', 'bot']:
@@ -631,99 +631,6 @@ def export_analysis_command(
         console.print(f"[red]Error writing CSV file: {e}[/red]")
         raise typer.Exit(code=1)
 
-# --- NN CLI Commands ---
-
-@nn_app.command(name="train", help="Train the draft prediction model.")
-def nn_train_command(
-    csv_file: str = typer.Option(CONFIG['csv_output_path'], help="Path to the training data CSV."),
-    epochs: int = typer.Option(CONFIG['nn_training_defaults']['epochs'], help="Number of training epochs."),
-    batch_size: int = typer.Option(CONFIG['nn_training_defaults']['batch_size'], help="Batch size for training."),
-    learning_rate: float = typer.Option(CONFIG['nn_training_defaults']['learning_rate'], help="Learning rate for the optimizer."),
-    model_file: str = typer.Option(CONFIG['model_weights_path'], "--model-file", help="Path to save/load model weights. Overrides config.")
-):
-    logger.info(f"Starting NN training with CSV: {csv_file}, Epochs: {epochs}, Batch: {batch_size}, LR: {learning_rate}")
-    logger.info(f"Model weights will be handled via: {model_file if model_file else CONFIG['model_weights_path']}")
-    # Setup model
-    train_loader, val_loader, _, num_heroes_in_map = load_and_preprocess_data(csv_file, batch_size)
-    
-    nn_params = CONFIG['nn_training_defaults']
-    model = DraftLanePredictor(
-        num_heroes=num_heroes_in_map,
-        hidden_layer_size1=nn_params['hidden_layer_size1'],
-        hidden_layer_size2=nn_params['hidden_layer_size2'],
-        hidden_layer_size3=nn_params['hidden_layer_size3'],
-        hidden_layer_size4=nn_params['hidden_layer_size4'],
-        output_layer_size=nn_params['output_layer_size']
-    )
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
-    # Train
-    trained_model, train_hist, val_hist = train_model(model, train_loader, val_loader, criterion, optimizer, epochs)
-    
-    # Evaluate
-    avg_mse, mae, actual_targets, predicted_outputs = evaluate_model(trained_model, val_loader, criterion)
-    logger.info(f"Validation Set - MSE: {avg_mse:.4f}, MAE: {mae:.4f}")
-    console.print(f"Validation Set - MSE: {avg_mse:.4f}, MAE: {mae:.4f}") # Keep console for direct user feedback
-
-    # Save artifacts
-    save_model_weights(trained_model, file_path_override=model_file)
-    plot_training_loss(train_hist, val_hist)
-    score_names = ["Top Radiant", "Top Dire", "Mid Radiant", "Mid Dire", "Bot Radiant", "Bot Dire"]
-    plot_evaluation_results(actual_targets, predicted_outputs, score_names)
-    logger.info("Training complete. Model and plots saved.")
-    console.print("[green]Training complete. Model and plots saved.[/green]")
-
-@nn_app.command(name="predict", help="Predict lane scores for a given draft string.")
-def nn_predict_command(
-    draft_string: str = typer.Argument(..., help='Semicolon-separated draft string. E.g., "Radiant Pick: Axe; Dire Pick: Juggernaut;..."'),
-    model_file: str = typer.Option(CONFIG['model_weights_path'], "--model-file", help="Path to load model weights from. Overrides config.")
-):
-    logger.info(f"Attempting prediction for draft: '{draft_string[:50]}...' using model: {model_file if model_file else CONFIG['model_weights_path']}")
-    
-    # Get hero ID to official name map (for resolving nicknames to canonical names)
-    all_heroes_map_from_db = db_manager.get_all_heroes()
-    if not all_heroes_map_from_db:
-        logger.error("Could not fetch hero list from database. Ensure static data is populated with 'refresh-static'.")
-        console.print("[bold red]Error:[/bold red] Could not fetch hero list from database. Please run 'refresh-static' command.")
-        raise typer.Exit(code=1)
-
-    # Load model and hero_to_index_map (official name to model index)
-    try:
-        _, _, hero_map, num_heroes_in_map = load_and_preprocess_data(CONFIG['csv_output_path'], CONFIG['nn_training_defaults']['batch_size'])
-    except SystemExit: # Raised by load_and_preprocess_data if CSV not found or no data
-        logger.error("Failed to load hero map for prediction due to CSV data issues. Ensure 'lanes.csv' (or configured CSV) exists and is valid.")
-        # console.print is handled by load_and_preprocess_data
-        raise typer.Exit(code=1)
-    
-    nn_params = CONFIG['nn_training_defaults']
-    model = DraftLanePredictor(
-        num_heroes=num_heroes_in_map,
-        hidden_layer_size1=nn_params['hidden_layer_size1'],
-        hidden_layer_size2=nn_params['hidden_layer_size2'],
-        hidden_layer_size3=nn_params['hidden_layer_size3'],
-        hidden_layer_size4=nn_params['hidden_layer_size4'],
-        output_layer_size=nn_params['output_layer_size']
-    )
-    loaded_model = load_model_weights(model, file_path_override=model_file)
-    if not loaded_model:
-        # load_model_weights logs the error
-        raise typer.Exit(code=1)
-
-    # Predict
-    scores = predict_draft(loaded_model, draft_string, hero_map, num_heroes_in_map, db_manager, all_heroes_map_from_db)
-    if scores:
-        logger.info(f"Prediction successful. Scores: {scores}")
-        table = Table(title="Predicted Lane Scores")
-        table.add_column("Lane")
-        table.add_column("Score", justify="right")
-        score_names = ["Top Radiant", "Top Dire", "Mid Radiant", "Mid Dire", "Bot Radiant", "Bot Dire"]
-        for name, score_val in zip(score_names, scores): # Renamed score to score_val
-            table.add_row(name, f"{score_val:.2f}")
-        console.print(table)
-    else:
-        logger.warning("Prediction did not return scores.")
-        # predict_draft logs if parsing fails
 
 # --- Matches Command Implementations ---
 @matches_app.command(name="export", help="Export all raw data for a specific match to JSON.")
@@ -754,6 +661,64 @@ def export_match_data_command(
         from rich.panel import Panel
         console.print(Panel(JSON.from_data(match_data), title=f"Match Data for ID {match_id}", border_style="blue"))
 
+# --- SQL Query Commands ---
+@app.command(name="sql", help="Execute custom SQL queries safely on the database.")
+def sql_query(
+    query: str = typer.Argument(..., help="SQL query to execute (SELECT/WITH only)"),
+    format: str = typer.Option("table", help="Output format: table, json, csv"),
+    limit: int = typer.Option(100, help="Maximum rows to display"),
+    export: str = typer.Option(None, help="Export results to file")
+):
+    try:
+        results = db_manager.execute_safe_query(query)
+        
+        if not results:
+            console.print("[yellow]Query returned no results.[/yellow]")
+            return
+            
+        # Apply limit
+        if len(results) > limit:
+            results = results[:limit]
+            console.print(f"[yellow]Results limited to {limit} rows[/yellow]")
+            
+        if format == "json":
+            output = json.dumps(results, indent=2, default=str)
+            console.print(output)
+        elif format == "csv":
+            if results:
+                import io
+                output = io.StringIO()
+                writer = csv.DictWriter(output, fieldnames=results[0].keys())
+                writer.writeheader()
+                writer.writerows(results)
+                console.print(output.getvalue())
+        else:  # table
+            if results:
+                table = Table(title=f"SQL Query Results ({len(results)} rows)")
+                for col in results[0].keys():
+                    table.add_column(str(col), style="cyan")
+                for row in results:
+                    table.add_row(*[str(v) if v is not None else "" for v in row.values()])
+                console.print(table)
+                
+        if export:
+            with open(export, 'w') as f:
+                if export.endswith('.json'):
+                    json.dump(results, f, indent=2, default=str)
+                else:  # CSV
+                    if results:
+                        writer = csv.DictWriter(f, fieldnames=results[0].keys())
+                        writer.writeheader()
+                        writer.writerows(results)
+            console.print(f"[green]Results exported to {export}[/green]")
+            
+    except ValueError as e:
+        console.print(f"[red]Security Error: {e}[/red]")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        logger.error(f"SQL query error: {e}")
+        console.print(f"[red]Query Error: {e}[/red]")
+        raise typer.Exit(code=1)
 
 if __name__ == "__main__":
     logger.info("Dota2Draft CLI application started.")

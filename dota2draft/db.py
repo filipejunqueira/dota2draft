@@ -2,8 +2,10 @@
 
 import sqlite3
 import json
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Generator
+from functools import lru_cache
 from .config_loader import CONFIG
 from .logger_config import logger
 
@@ -31,19 +33,34 @@ class DBManager:
         if self.conn:
             self.conn.close()
             logger.info(f"Database connection to '{self.db_name}' closed.")
+    
+    @contextmanager
+    def get_connection(self) -> Generator[sqlite3.Connection, None, None]:
+        """
+        Context manager for database connections.
+        Ensures proper transaction handling and connection cleanup.
+        """
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_name)
+            conn.row_factory = sqlite3.Row
+            yield conn
+            conn.commit()
+        except sqlite3.Error as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Database error: {e}")
+            raise
+        finally:
+            if conn:
+                conn.close()
 
     def _init_tables(self):
         """Creates all necessary tables if they don't already exist."""
         try:
             cursor = self.conn.cursor()
-            # Check if 'league_id' column exists in 'matches' table and add it if not.
-            cursor.execute("PRAGMA table_info(matches)")
-            columns = [column['name'] for column in cursor.fetchall()]
-            if 'league_id' not in columns:
-                # Adding with a default or allowing NULL. Defaulting to 0 for unknown.
-                cursor.execute("ALTER TABLE matches ADD COLUMN league_id INTEGER DEFAULT 0")
-                logger.info("Added 'league_id' column to 'matches' table.")
-
+            
+            # Create tables first
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS matches (
                 match_id INTEGER PRIMARY KEY,
@@ -51,6 +68,14 @@ class DBManager:
                 data TEXT NOT NULL,
                 fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
             )""")
+            
+            # Check if 'league_id' column exists in 'matches' table and add it if not.
+            cursor.execute("PRAGMA table_info(matches)")
+            columns = [column['name'] for column in cursor.fetchall()]
+            if 'league_id' not in columns:
+                # Adding with a default or allowing NULL. Defaulting to 0 for unknown.
+                cursor.execute("ALTER TABLE matches ADD COLUMN league_id INTEGER DEFAULT 0")
+                logger.info("Added 'league_id' column to 'matches' table.")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_matches_league_id ON matches (league_id);")
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS heroes (
@@ -135,8 +160,9 @@ class DBManager:
         except sqlite3.Error as e:
             logger.error(f"SQLite error storing match {match_id}: {e}")
 
+    @lru_cache(maxsize=1)
     def get_all_heroes(self) -> Dict[int, str]:
-        """Retrieves all heroes, mapping hero_id to hero_name."""
+        """Retrieves all heroes, mapping hero_id to hero_name. Cached for performance."""
         try:
             cursor = self.conn.cursor()
             cursor.execute("SELECT hero_id, name FROM heroes")
@@ -158,6 +184,7 @@ class DBManager:
             if heroes_to_store:
                 self.conn.executemany("INSERT OR REPLACE INTO heroes (hero_id, name, fetched_at) VALUES (?, ?, CURRENT_TIMESTAMP)", heroes_to_store)
                 self.conn.commit()
+                self.get_all_heroes.cache_clear()  # Clear cache after update
                 logger.info(f"[DB] Stored/Updated {len(heroes_to_store)} heroes.")
         except sqlite3.Error as e:
             logger.error(f"SQLite error storing heroes: {e}")
@@ -167,9 +194,32 @@ class DBManager:
         try:
             self.conn.execute("DELETE FROM heroes")
             self.conn.commit()
+            self.get_all_heroes.cache_clear()  # Clear cache after deletion
             logger.info("[DB] Cleared 'heroes' table.")
         except sqlite3.Error as e:
             logger.error(f"SQLite error clearing heroes: {e}")
+
+    def execute_safe_query(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
+        """Execute safe read-only SQL queries with parameter binding."""
+        safe_keywords = ['SELECT', 'WITH']
+        unsafe_keywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE']
+        
+        query_upper = query.strip().upper()
+        if not any(query_upper.startswith(kw) for kw in safe_keywords):
+            raise ValueError("Only SELECT and WITH queries allowed")
+        if any(kw in query_upper for kw in unsafe_keywords):
+            raise ValueError("Unsafe SQL operations not permitted")
+            
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                rows = cursor.fetchall()
+                return [dict(zip(columns, row)) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"SQL query error: {e}")
+            raise
 
     def get_all_teams(self) -> Dict[int, str]:
         """Retrieves all teams, mapping team_id to team_name."""
@@ -778,13 +828,17 @@ class DBManager:
         """Retrieves all stored matches that belong to a specific league."""
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT data FROM matches")
-            all_matches_raw = cursor.fetchall()
+            # Use the league_id column for efficient filtering instead of loading all matches
+            cursor.execute("SELECT data FROM matches WHERE league_id = ?", (league_id,))
+            league_matches_raw = cursor.fetchall()
             league_matches = []
-            for row in all_matches_raw:
-                match_data = json.loads(row['data'])
-                if match_data.get('leagueid') == league_id:
+            for row in league_matches_raw:
+                try:
+                    match_data = json.loads(row['data'])
                     league_matches.append(match_data)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"[DB] Skipping corrupted match data: {e}")
+                    continue
             logger.debug(f"[DB] Found {len(league_matches)} stored matches for league {league_id}.")
             return league_matches
         except (sqlite3.Error, json.JSONDecodeError) as e:

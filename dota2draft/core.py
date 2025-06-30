@@ -45,7 +45,7 @@ class DataService:
             return db_hero_map
 
         logger.info("[CACHE] Hero map not in cache or DB (or force refresh). Fetching from API.")
-        api_data_list = self.api_client.fetch_hero_stats()
+        api_data_list = self.api_client.fetch_all_heroes()
         if api_data_list:
             self.db_manager.store_all_heroes(api_data_list)
             fresh_hero_map = self.db_manager.get_all_heroes()

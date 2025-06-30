@@ -34,7 +34,7 @@ def test_store_and_get_match(db_manager: DBManager):
     mock_match_data = {"match_id": match_id, "radiant_win": True, "duration": 2400}
 
     # Store the match
-    db_manager.store_match_data(match_id, mock_match_data)
+    db_manager.store_match_data(match_id, 123, mock_match_data)
 
     # Retrieve the match
     retrieved_match = db_manager.get_match_data(match_id)
@@ -75,8 +75,8 @@ def test_get_hero_stats(db_manager: DBManager):
             {"is_pick": True, "hero_id": 3, "team": 1}, # Bane picked by dire
         ]
     }
-    db_manager.store_match_data(101, mock_match_1)
-    db_manager.store_match_data(102, mock_match_2)
+    db_manager.store_match_data(101, 123, mock_match_1)
+    db_manager.store_match_data(102, 123, mock_match_2)
 
     # 2. Action: Get hero stats
     hero_stats = db_manager.get_hero_stats()

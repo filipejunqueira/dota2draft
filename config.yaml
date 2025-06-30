@@ -3,9 +3,7 @@
 # --- General Paths ---
 database_path: "opendota_league_info.db"
 csv_output_path: "lanes.csv"
-nn_artifacts_path: "nn_outputs/"
 log_file_path: "dota2draft.log"
-model_weights_path: "dota_draft_predictor_weights.pth"
 
 # --- KPI Parameters for Lane Analysis ---
 # (Mirrors the structure previously in dota2draft/analysis.py)
@@ -27,14 +25,3 @@ kpi_parameters:
     points_for_early_tower_kill: 3
   display_secondary_minute_mark: 8
 
-# --- Neural Network Default Training Parameters ---
-nn_training_defaults:
-  num_heroes_input: 132 # Should ideally be dynamic based on dataset, but can be a default
-  hidden_layer_size1: 128
-  hidden_layer_size2: 256
-  hidden_layer_size3: 128
-  hidden_layer_size4: 64
-  output_layer_size: 6
-  epochs: 50
-  batch_size: 10
-  learning_rate: 0.001

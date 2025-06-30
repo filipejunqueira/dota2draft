@@ -48,8 +48,8 @@ def db_manager():
             {"account_id": 1003, "personaname": "PlayerC", "isRadiant": False},
         ]
     }
-    manager.store_match_data(101, mock_match_1)
-    manager.store_match_data(102, mock_match_2)
+    manager.store_match_data(101, 123, mock_match_1)
+    manager.store_match_data(102, 123, mock_match_2)
 
     yield manager
     manager.close()
@@ -100,39 +100,37 @@ def test_heroes_stats_command_with_date_filter(runner: CliRunner):
 
 def test_fetch_league_command(runner: CliRunner, mocker):
     """
-    Integration test for the top-level 'fetch-league' command.
+    Integration test for the 'leagues fetch' command.
     """
     # Mock the dependencies of the command
     mock_api_client = mocker.patch('dota2draft_cli.api_client')
     mock_data_service = mocker.patch('dota2draft_cli.data_service')
 
-    # Simulate the API returning a list of match summaries
-    mock_api_client.fetch_league_matches_summary.return_value = [{'match_id': 1}, {'match_id': 2}]
+    # Simulate the API returning a list of match IDs
+    mock_api_client.fetch_matches_for_league.return_value = [1, 2]
     # Simulate get_match_details returning a success status
     mock_data_service.get_match_details.return_value = (FetchStatus.ADDED, {})
 
-
     # 1. Run the command without the --force-refresh flag
-    result = runner.invoke(app, ["fetch-league", "123"])
+    result = runner.invoke(app, ["leagues", "fetch", "123"])
 
     assert result.exit_code == 0, result.stdout
     # Verify that get_match_details was called for each match with force_refresh=False
-    mock_data_service.get_match_details.assert_any_call(1, force_refresh=False)
-    mock_data_service.get_match_details.assert_any_call(2, force_refresh=False)
+    mock_data_service.get_match_details.assert_any_call(1, 123, force_refresh=False)
+    mock_data_service.get_match_details.assert_any_call(2, 123, force_refresh=False)
     assert mock_data_service.get_match_details.call_count == 2
 
     # Reset the mock for the next run
     mock_data_service.reset_mock()
     mock_data_service.get_match_details.return_value = (FetchStatus.ADDED, {})
 
-
     # 2. Run the command WITH the --force-refresh flag
-    result_forced = runner.invoke(app, ["fetch-league", "123", "--force-refresh"])
+    result_forced = runner.invoke(app, ["leagues", "fetch", "123", "--force-refresh"])
 
     assert result_forced.exit_code == 0, result_forced.stdout
     # Verify that get_match_details was called for each match with force_refresh=True
-    mock_data_service.get_match_details.assert_any_call(1, force_refresh=True)
-    mock_data_service.get_match_details.assert_any_call(2, force_refresh=True)
+    mock_data_service.get_match_details.assert_any_call(1, 123, force_refresh=True)
+    mock_data_service.get_match_details.assert_any_call(2, 123, force_refresh=True)
     assert mock_data_service.get_match_details.call_count == 2
 
 
@@ -192,3 +190,130 @@ def test_player_nickname_commands(runner: CliRunner):
     result_list_after_remove = runner.invoke(app, ["players", "list-nicknames", account_id])
     assert result_list_after_remove.exit_code == 0
     assert "No nicknames found" in result_list_after_remove.stdout
+
+
+def test_analyze_lanes_command(runner: CliRunner, mocker):
+    """
+    Integration test for the 'analyze-lanes' command.
+    """
+    # Mock the data service
+    mock_data_service = mocker.patch('dota2draft_cli.data_service')
+    mock_hero_map = {"1": "Anti-Mage", "2": "Axe"}
+    mock_data_service.get_hero_map.return_value = mock_hero_map
+    
+    # Mock match data
+    mock_match_data = {
+        "match_id": 101,
+        "radiant_win": True,
+        "picks_bans": [],
+        "players": []
+    }
+    mock_data_service.get_match_details.return_value = (FetchStatus.ADDED, mock_match_data)
+    
+    # Mock the analysis function
+    mock_analysis = mocker.patch('dota2draft_cli.perform_core_lane_analysis_for_match')
+    mock_analysis.return_value = {
+        "lanes": {
+            "top": {"radiant": {"score": 5}, "dire": {"score": 3}},
+            "mid": {"radiant": {"score": 4}, "dire": {"score": 6}},
+            "bot": {"radiant": {"score": 2}, "dire": {"score": 8}}
+        },
+        "draft_order": "Mock draft string"
+    }
+    
+    # Test table format
+    result = runner.invoke(app, ["analyze-lanes", "101", "--format", "table"])
+    assert result.exit_code == 0
+    assert "Laning Phase Analysis" in result.stdout
+    
+    # Test JSON format  
+    result_json = runner.invoke(app, ["analyze-lanes", "101", "--format", "json"])
+    assert result_json.exit_code == 0
+
+
+def test_export_analysis_command(runner: CliRunner, mocker):
+    """
+    Integration test for the 'export-analysis' command.
+    """
+    import tempfile
+    import os
+    
+    # Mock the database manager to return matches
+    mock_db_manager = mocker.patch('dota2draft_cli.db_manager')
+    mock_db_manager.get_all_matches_from_league.return_value = [
+        {"match_id": 101, "radiant_win": True},
+        {"match_id": 102, "radiant_win": False}
+    ]
+    
+    # Mock data service
+    mock_data_service = mocker.patch('dota2draft_cli.data_service')
+    mock_data_service.get_hero_map.return_value = {"1": "Anti-Mage"}
+    
+    # Mock analysis function
+    mock_analysis = mocker.patch('dota2draft_cli.perform_core_lane_analysis_for_match')
+    mock_analysis.return_value = {
+        "match_id": 101,
+        "draft_order": "Test draft",
+        "lanes": {
+            "top": {"radiant": {"score": 5}, "dire": {"score": 3}},
+            "mid": {"radiant": {"score": 4}, "dire": {"score": 6}},
+            "bot": {"radiant": {"score": 2}, "dire": {"score": 8}}
+        }
+    }
+    
+    # Create a temporary file for testing
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
+        temp_path = f.name
+    
+    try:
+        # Mock typer.confirm to return True
+        mocker.patch('typer.confirm', return_value=True)
+        
+        result = runner.invoke(app, ["export-analysis", "123", "--out", temp_path])
+        assert result.exit_code == 0
+        assert "Analysis exported" in result.stdout
+        
+        # Verify file was created
+        assert os.path.exists(temp_path)
+    finally:
+        # Clean up
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+def test_sql_command(runner: CliRunner, mocker):
+    """
+    Integration test for the 'sql' command.
+    """
+    # Mock the database manager
+    mock_db_manager = mocker.patch('dota2draft_cli.db_manager')
+    mock_db_manager.execute_safe_query.return_value = [
+        {"count": 5, "league_id": 123},
+        {"count": 3, "league_id": 456}
+    ]
+    
+    result = runner.invoke(app, ["sql", "SELECT COUNT(*) as count, league_id FROM matches GROUP BY league_id"])
+    assert result.exit_code == 0
+    assert "SQL Query Results" in result.stdout
+
+
+def test_matches_export_command(runner: CliRunner, mocker):
+    """
+    Integration test for the 'matches export' command.
+    """
+    # Mock the database manager
+    mock_db_manager = mocker.patch('dota2draft_cli.db_manager')
+    mock_db_manager.get_match_data.return_value = {
+        "match_id": 101,
+        "radiant_win": True,
+        "players": []
+    }
+    
+    result = runner.invoke(app, ["matches", "export", "101"])
+    assert result.exit_code == 0
+    
+    # Test with missing match
+    mock_db_manager.get_match_data.return_value = None
+    result_missing = runner.invoke(app, ["matches", "export", "999"])
+    assert result_missing.exit_code == 1
+    assert "not found" in result_missing.stdout

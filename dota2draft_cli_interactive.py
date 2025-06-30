@@ -25,11 +25,6 @@ def _run_command(command_args: List[str]):
 
 
 # Command Dictionaries
-NN_COMMANDS = {
-    "Train Model": ["nn", "train"],
-    "Predict Draft": ["nn", "predict"],
-    "Back to Main Menu": None
-}
 
 PLAYER_COMMANDS = {
     "Get Player Stats": ["players", "stats"],
@@ -64,27 +59,6 @@ LEAGUE_COMMANDS = {
 }
 
 # Menu Handlers
-def handle_nn_menu():
-    """Handles the interactive menu for Neural Network commands."""
-    while True:
-        choice = questionary.select("Neural Network Menu:", choices=list(NN_COMMANDS.keys())).ask()
-        if choice is None or choice == "Back to Main Menu": break
-
-        command_args = NN_COMMANDS[choice][:]
-        if choice == "Train Model":
-            typer.echo("Configuring training parameters (press Enter for defaults)...")
-            if csv_file := questionary.text("Path to training data CSV:").ask(): command_args.extend(["--csv-file", csv_file])
-            if epochs := questionary.text("Number of epochs:").ask(): command_args.extend(["--epochs", epochs])
-            if batch_size := questionary.text("Batch size:").ask(): command_args.extend(["--batch-size", batch_size])
-            if lr := questionary.text("Learning rate:").ask(): command_args.extend(["--learning-rate", lr])
-            if model_file := questionary.text("Path to save/load model weights:").ask(): command_args.extend(["--model-file", model_file])
-        elif choice == "Predict Draft":
-            if not (draft_string := questionary.text("Enter draft string:").ask()):
-                typer.echo("Draft string cannot be empty."); continue
-            command_args.append(draft_string)
-            if model_file := questionary.text("Path to load model weights (optional):").ask():
-                command_args.extend(["--model-file", model_file])
-        _run_command(command_args)
 
 def handle_players_menu():
     """Handles the interactive menu for player commands."""
@@ -213,11 +187,11 @@ def main_interactive_loop():
         "Players": handle_players_menu,
         "Heroes": handle_heroes_menu,
         "Matches": handle_matches_menu,
-        "Neural Network (nn)": handle_nn_menu,
         "Refresh Static Data": lambda: _run_command(["refresh-static"]) if questionary.confirm("Refresh all static data (heroes, leagues, teams)?").ask() else None,
         "Get Match Draft": lambda: _run_command(["get-draft", mid]) if (mid := questionary.text("Enter Match ID:").ask()) else None,
         "Analyze Lanes for Match": lambda: _run_command(["analyze-lanes", mid, "--format", fmt]) if (mid := questionary.text("Enter Match ID:").ask()) and (fmt := questionary.select("Select output format:", choices=["table", "json"]).ask()) else None,
         "Export League Analysis to CSV": lambda: _run_command(["export-analysis", lid] + (["--out", ofile] if (ofile := questionary.text("Output file path (optional):").ask()) else [])) if (lid := questionary.text("Enter League ID:").ask()) else None,
+        "Custom SQL Query": lambda: handle_sql_query(),
         "Exit": None
     }
 
@@ -234,6 +208,33 @@ def main_interactive_loop():
         action = main_menu_choices.get(choice)
         if action:
             action()
+
+def handle_sql_query():
+    """Handles custom SQL query input and execution."""
+    typer.echo("\n[bold cyan]Custom SQL Query Interface[/bold cyan]")
+    typer.echo("Execute SELECT or WITH queries safely on the database.")
+    typer.echo("Examples:")
+    typer.echo("  SELECT COUNT(*) FROM matches")
+    typer.echo("  SELECT league_id, COUNT(*) as match_count FROM matches GROUP BY league_id")
+    
+    while True:
+        query = questionary.text("Enter your SQL query (or 'back' to return to main menu):").ask()
+        if not query or query.lower() in ['back', 'exit']:
+            break
+            
+        format_choice = questionary.select(
+            "Output format:",
+            choices=["table", "json", "csv"]
+        ).ask()
+        
+        limit = questionary.text("Row limit (default 100):").ask()
+        limit_arg = ["--limit", limit] if limit and limit.isdigit() else []
+        
+        export_file = questionary.text("Export to file (optional):").ask()
+        export_arg = ["--export", export_file] if export_file else []
+        
+        command_args = ["sql", query, "--format", format_choice] + limit_arg + export_arg
+        _run_command(command_args)
 
 if __name__ == "__main__":
     main_interactive_loop()

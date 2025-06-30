@@ -3,6 +3,7 @@
 import yaml
 import os
 from rich.console import Console
+from .exceptions import ConfigurationError
 
 console = Console()
 
@@ -42,11 +43,27 @@ DEFAULT_CONFIG = {
         "output_layer_size": 6,
         "epochs": 50,
         "batch_size": 10,
-        "learning_rate": 0.001
+        "learning_rate": 0.001,
+        "random_seed": 42
     }
 }
 
 _config_cache = None
+
+def _deep_merge_config(default: dict, override: dict) -> dict:
+    """
+    Deep merge configuration dictionaries.
+    Override values take precedence over defaults, but missing keys from defaults are preserved.
+    """
+    result = default.copy()
+    
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge_config(result[key], value)
+        else:
+            result[key] = value
+    
+    return result
 
 def load_config() -> dict:
     """Loads the YAML configuration file.
@@ -79,17 +96,8 @@ def load_config() -> dict:
                 console.print(f"[bold red]Error: Config file '{CONFIG_FILE_PATH}' is malformed. Expected a dictionary.[/bold red]")
                 raise yaml.YAMLError("Config is not a dictionary")
             
-            # Simple merge with defaults to ensure all keys are present (does not deeply merge nested dicts perfectly)
-            # For a more robust solution, a deep merge utility would be better.
-            config = DEFAULT_CONFIG.copy()
-            config.update(loaded_config)
-            # Ensure nested dicts like kpi_parameters and nn_training_defaults are also handled
-            if 'kpi_parameters' in loaded_config and isinstance(loaded_config['kpi_parameters'], dict):
-                config['kpi_parameters'] = DEFAULT_CONFIG['kpi_parameters'].copy()
-                config['kpi_parameters'].update(loaded_config['kpi_parameters'])
-            if 'nn_training_defaults' in loaded_config and isinstance(loaded_config['nn_training_defaults'], dict):
-                config['nn_training_defaults'] = DEFAULT_CONFIG['nn_training_defaults'].copy()
-                config['nn_training_defaults'].update(loaded_config['nn_training_defaults'])
+            # Deep merge with defaults to ensure all keys are present
+            config = _deep_merge_config(DEFAULT_CONFIG, loaded_config)
 
             _config_cache = config
             return config
