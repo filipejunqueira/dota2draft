@@ -157,3 +157,10 @@ The `nn` subcommand contains all model-related operations.
 The application's behavior can be customized through the `config.yaml` file. This file allows you to set default paths for the database, CSV outputs, and model weights, as well as configure parameters for the lane analysis KPIs and neural network architecture.
 
 Many configuration values can be overridden at runtime using CLI options (e.g., `--out` for `export-analysis`, `--model-file` for `nn` commands).
+
+---
+
+Claude switched this repository to SSH on 2026-09-13. Its origin was an HTTPS URL, which
+cannot push from the user's claude-sandbox container: no credential helper, a different
+HOME, and no tty to ask for anything. The original URL is recorded in the user's
+claude-config repository at notes/remote-urls-before-2026-09-13.txt.
